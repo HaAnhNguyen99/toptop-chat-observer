@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>TikTok Live Chat</title>
+<style>
+  :root { --bg:#0f1115; --panel:#171a21; --line:#262a33; --text:#e7e9ee; --mute:#8a90a0; --acc:#fe2c55; --ok:#25d07d; --hl:#3a2a10; --hlb:#f5b301; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background:var(--bg); color:var(--text); height:100vh; display:flex; flex-direction:column; }
+  header { display:flex; align-items:center; gap:12px; padding:10px 16px; border-bottom:1px solid var(--line); }
+  header h1 { font-size:16px; margin:0; }
+  .dot { width:9px; height:9px; border-radius:50%; background:var(--mute); }
+  .dot.on { background:var(--ok); box-shadow:0 0 8px var(--ok); }
+  #status { color:var(--mute); font-size:13px; flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .stat { font-size:13px; color:var(--mute); } .stat b { color:var(--text); }
+  main { flex:1; display:grid; grid-template-columns: 1fr 380px; min-height:0; }
+  section { display:flex; flex-direction:column; min-height:0; border-right:1px solid var(--line); }
+  aside { display:flex; flex-direction:column; min-height:0; overflow:auto; }
+  .bar { display:flex; gap:8px; flex-wrap:wrap; align-items:center; padding:10px 12px; border-bottom:1px solid var(--line); background:var(--panel); }
+  input[type=text] { background:#0c0e12; border:1px solid var(--line); color:var(--text); border-radius:6px; padding:7px 9px; min-width:0; flex:1; }
+  select, button { background:#222632; color:var(--text); border:1px solid var(--line); border-radius:6px; padding:7px 10px; cursor:pointer; }
+  button.primary { background:var(--acc); border-color:var(--acc); }
+  label { display:flex; gap:5px; align-items:center; font-size:13px; color:var(--mute); white-space:nowrap; }
+  #chat { flex:1; overflow-y:auto; padding:6px 0; }
+  .msg { padding:5px 14px; display:flex; gap:8px; border-left:3px solid transparent; }
+  .msg .t { color:var(--mute); font-size:12px; min-width:58px; font-variant-numeric:tabular-nums; padding-top:1px; }
+  .msg .u { color:#7cc4ff; font-weight:600; white-space:nowrap; }
+  .msg.hit { background:var(--hl); border-left-color:var(--hlb); }
+  .msg.order { border-left-color:var(--ok); }
+  .tag { font-size:11px; padding:1px 6px; border-radius:4px; background:#0e3a26; color:var(--ok); margin-left:6px; white-space:nowrap; }
+  mark { background:var(--hlb); color:#000; border-radius:3px; padding:0 2px; }
+  .box { padding:12px 14px; border-bottom:1px solid var(--line); }
+  .box h2 { font-size:13px; text-transform:uppercase; letter-spacing:.06em; color:var(--mute); margin:0 0 8px; display:flex; justify-content:space-between; align-items:center; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  td, th { text-align:left; padding:5px 4px; border-bottom:1px solid var(--line); }
+  th { color:var(--mute); font-weight:500; }
+  td.n { text-align:right; font-variant-numeric:tabular-nums; }
+  .col { display:flex; flex-direction:column; gap:8px; }
+  .row { display:flex; gap:8px; align-items:center; }
+  .hint { color:var(--mute); font-size:12px; }
+  #newBtn { position:sticky; bottom:8px; margin:0 auto; display:none; }
+</style>
+</head>
+<body>
+<header>
+  <span class="dot" id="dot"></span>
+  <h1 id="title">TikTok Live Chat</h1>
+  <span id="status">Đang kết nối…</span>
+  <span class="stat">Tin: <b id="cMsg">0</b></span>
+  <span class="stat">Đơn: <b id="cOrd">0</b></span>
+</header>
+
+<main>
+  <section>
+    <div class="bar">
+      <input type="text" id="filter" placeholder="Lọc/tô sáng từ khoá, cách nhau bằng dấu phẩy (vd: giá, ship, size)" />
+      <label><input type="checkbox" id="onlyHits" /> Chỉ hiện tin khớp</label>
+      <label><input type="checkbox" id="onlyOrders" /> Chỉ hiện đơn</label>
+    </div>
+    <div id="chat"></div>
+    <button id="newBtn" class="primary">↓ Có tin mới</button>
+  </section>
+
+  <aside>
+    <div class="box col">
+      <h2>Cảnh báo & đọc to</h2>
+      <div class="row">
+        <label><input type="checkbox" id="beep" checked /> Tiếng bíp khi khớp</label>
+      </div>
+      <div class="row">
+        <label>Đọc to:</label>
+        <select id="ttsMode">
+          <option value="off">Tắt</option>
+          <option value="hits">Tin khớp từ khoá</option>
+          <option value="orders">Tin chốt đơn</option>
+          <option value="all">Tất cả tin</option>
+        </select>
+        <label><input type="checkbox" id="ttsName" checked /> Đọc tên</label>
+      </div>
+      <div class="row">
+        <label>Tốc độ</label><input type="range" id="ttsRate" min="0.6" max="2" step="0.1" value="1.2" />
+        <button id="ttsTest">Thử</button>
+      </div>
+      <div class="hint" id="voiceInfo"></div>
+    </div>
+
+    <div class="box">
+      <h2>Thống kê theo mã <a href="/orders.csv"><button>Xuất CSV</button></a></h2>
+      <table><thead><tr><th>Mã</th><th class="n">Lượt</th><th class="n">SL</th><th class="n">Khách</th></tr></thead>
+      <tbody id="byCode"></tbody></table>
+    </div>
+
+    <div class="box">
+      <h2>Đơn mới nhất</h2>
+      <table><thead><tr><th>User</th><th>Mã</th><th class="n">SL</th><th>SĐT</th></tr></thead>
+      <tbody id="orderList"></tbody></table>
+    </div>
+  </aside>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const chat = $('chat');
+let history = [], orders = [], hitWords = [];
+
+// ----- lưu cài đặt -----
+const SETTINGS = ['filter','onlyHits','onlyOrders','beep','ttsMode','ttsName','ttsRate'];
+function save() { try { const o={}; SETTINGS.forEach(k=>{const e=$(k); o[k]=e.type==='checkbox'?e.checked:e.value;}); localStorage.setItem('tlc', JSON.stringify(o)); } catch(e){} }
+function load() { try { const o=JSON.parse(localStorage.getItem('tlc')||'{}'); SETTINGS.forEach(k=>{ if(k in o){const e=$(k); if(e.type==='checkbox') e.checked=o[k]; else e.value=o[k];}}); } catch(e){} }
+load();
+
+// ----- tiện ích -----
+const norm = (s) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/đ/g,'d');
+const esc = (s) => s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmtT = (ts) => new Date(ts).toLocaleTimeString('vi-VN', {hour12:false});
+function parseWords() { hitWords = $('filter').value.split(',').map(s=>norm(s.trim())).filter(Boolean); }
+const isHit = (m) => hitWords.length && hitWords.some(w => norm(m.user + ' ' + m.text).includes(w));
+
+function highlight(text) {
+  if (!hitWords.length) return esc(text);
+  // tô sáng không phân biệt dấu: so trên bản bỏ dấu, cắt trên bản gốc (độ dài giữ nguyên sau NFC)
+  const n = norm(text); const marks = new Array(text.length).fill(false);
+  if (n.length === text.length) hitWords.forEach(w => { let i = n.indexOf(w); while (i >= 0) { for (let j=i;j<i+w.length;j++) marks[j]=true; i = n.indexOf(w, i+1); } });
+  let out = '', open = false;
+  for (let i=0;i<text.length;i++) { if (marks[i]&&!open){out+='<mark>';open=true;} if(!marks[i]&&open){out+='</mark>';open=false;} out+=esc(text[i]); }
+  return out + (open ? '</mark>' : '');
+}
+
+function render(m) {
+  const hit = isHit(m);
+  if ($('onlyHits').checked && !hit) return null;
+  if ($('onlyOrders').checked && !m.order) return null;
+  const d = document.createElement('div');
+  d.className = 'msg' + (hit ? ' hit' : '') + (m.order ? ' order' : '');
+  const tag = m.order ? `<span class="tag">🛒 ${esc(m.order.code)} ×${m.order.qty}${m.order.phone ? ' · ' + esc(m.order.phone) : ''}</span>` : '';
+  d.innerHTML = `<span class="t">${fmtT(m.ts)}</span><div><span class="u">${esc(m.user || '?')}</span>: ${highlight(m.text)}${tag}</div>`;
+  return d;
+}
+
+const atBottom = () => chat.scrollHeight - chat.scrollTop - chat.clientHeight < 60;
+function append(m) {
+  const stick = atBottom();
+  const d = render(m); if (!d) return;
+  chat.appendChild(d);
+  while (chat.children.length > 800) chat.firstChild.remove();
+  if (stick) chat.scrollTop = chat.scrollHeight; else $('newBtn').style.display = 'block';
+}
+function rerender() { parseWords(); chat.innerHTML=''; history.forEach(append); chat.scrollTop = chat.scrollHeight; }
+$('newBtn').onclick = () => { chat.scrollTop = chat.scrollHeight; $('newBtn').style.display='none'; };
+chat.addEventListener('scroll', () => { if (atBottom()) $('newBtn').style.display='none'; });
+
+// ----- thống kê -----
+function renderOrders() {
+  $('cOrd').textContent = orders.length;
+  const by = {};
+  orders.forEach(o => { const b = by[o.code] ||= {n:0, q:0, users:new Set()}; b.n++; b.q += o.qty; b.users.add(o.user); });
+  $('byCode').innerHTML = Object.entries(by).sort((a,b)=>b[1].q-a[1].q)
+    .map(([c,b]) => `<tr><td>${esc(c)}</td><td class="n">${b.n}</td><td class="n">${b.q}</td><td class="n">${b.users.size}</td></tr>`).join('')
+    || '<tr><td colspan="4" class="hint">Chưa có đơn</td></tr>';
+  $('orderList').innerHTML = orders.slice(-30).reverse()
+    .map(o => `<tr title="${esc(o.text)}"><td>${esc(o.user)}</td><td>${esc(o.code)}</td><td class="n">${o.qty}</td><td>${esc(o.phone||'')}</td></tr>`).join('');
+}
+
+// ----- cảnh báo -----
+let actx;
+function beep() {
+  try { actx ||= new AudioContext(); const o = actx.createOscillator(), g = actx.createGain();
+    o.frequency.value = 880; g.gain.setValueAtTime(0.15, actx.currentTime); g.gain.exponentialRampToValueAtTime(0.001, actx.currentTime + 0.25);
+    o.connect(g).connect(actx.destination); o.start(); o.stop(actx.currentTime + 0.25); } catch(e){}
+}
+let viVoice = null;
+function pickVoice() {
+  const vs = speechSynthesis.getVoices();
+  viVoice = vs.find(v => v.lang && v.lang.toLowerCase().startsWith('vi')) || null;
+  $('voiceInfo').textContent = viVoice ? 'Giọng: ' + viVoice.name : 'Không thấy giọng tiếng Việt trên máy — sẽ dùng giọng mặc định (Chrome trên Windows/Mac thường có sẵn).';
+}
+if ('speechSynthesis' in window) { pickVoice(); speechSynthesis.onvoiceschanged = pickVoice; }
+function speak(text) {
+  if (!('speechSynthesis' in window)) return;
+  if (speechSynthesis.pending) return; // tránh dồn hàng đợi khi chat quá nhanh
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = 'vi-VN'; if (viVoice) u.voice = viVoice; u.rate = +$('ttsRate').value;
+  speechSynthesis.speak(u);
+}
+$('ttsTest').onclick = () => speak('Xin chào, đây là thử giọng đọc bình luận.');
+
+function alertFor(m) {
+  const hit = isHit(m), mode = $('ttsMode').value;
+  if (hit && $('beep').checked) beep();
+  const say = mode === 'all' || (mode === 'hits' && hit) || (mode === 'orders' && m.order);
+  if (say) speak(($('ttsName').checked && m.user ? m.user + ' nói: ' : '') + m.text);
+}
+
+// ----- sự kiện UI -----
+['filter','onlyHits','onlyOrders'].forEach(k => $(k).addEventListener('input', () => { save(); rerender(); }));
+['beep','ttsMode','ttsName','ttsRate'].forEach(k => $(k).addEventListener('input', save));
+
+// ----- WebSocket -----
+function connect() {
+  const ws = new WebSocket(`ws://${location.host}`);
+  ws.onopen = () => $('dot').classList.add('on');
+  ws.onclose = () => { $('dot').classList.remove('on'); $('status').textContent = 'Mất kết nối server — thử lại…'; setTimeout(connect, 2000); };
+  ws.onmessage = (ev) => {
+    const d = JSON.parse(ev.data);
+    if (d.type === 'init') {
+      history = d.history; orders = d.orders;
+      $('title').textContent = '@' + d.username; $('status').textContent = d.status;
+      $('cMsg').textContent = history.length; rerender(); renderOrders();
+    } else if (d.type === 'status') {
+      $('status').textContent = d.status;
+    } else if (d.type === 'chat') {
+      const m = d.msg; history.push(m); if (history.length > 1000) history.shift();
+      $('cMsg').textContent = +$('cMsg').textContent + 1;
+      append(m); alertFor(m);
+      if (m.order) { orders.push({ ...m.order, user: m.user, text: m.text, ts: m.ts }); renderOrders(); }
+    }
+  };
+}
+parseWords(); connect();
+</script>
+</body>
+</html>

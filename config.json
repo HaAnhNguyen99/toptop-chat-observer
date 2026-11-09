@@ -1,0 +1,18 @@
+{
+  "username": "ten_kenh_tiktok",
+  "port": 3000,
+  "headless": false,
+  "profileDir": "./.browser-profile",
+  "reloadIfSilentMinutes": 5,
+
+  "selectors": {
+    "message": "[data-e2e=\"chat-message\"]",
+    "owner": "[data-e2e=\"message-owner-name\"]"
+  },
+
+  "order": {
+    "keywords": ["chốt", "chot", "lấy", "lay", "mua", "đặt", "dat", "ib"],
+    "codePattern": "[a-zA-Z]{0,3}\\d{1,4}",
+    "phonePattern": "(?:\\+?84|0)\\d{9}"
+  }
+}
